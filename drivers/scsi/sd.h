@@ -122,6 +122,10 @@ struct scsi_disk {
 	unsigned	urswrz : 1;
 	unsigned	security : 1;
 	unsigned	ignore_medium_access_errors : 1;
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
+	
 #ifdef CONFIG_USB_STORAGE_DETECT
 	wait_queue_head_t	 delay_wait;
 	struct completion	scanning_done;

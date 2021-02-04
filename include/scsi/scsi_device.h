@@ -8,6 +8,7 @@
 #include <linux/blkdev.h>
 #include <scsi/scsi.h>
 #include <linux/atomic.h>
+#include <linux/android_kabi.h>
 
 struct device;
 struct request_queue;
@@ -40,7 +41,7 @@ enum scsi_device_state {
 				 * All commands allowed */
 	SDEV_CANCEL,		/* beginning to delete device
 				 * Only error handler commands allowed */
-	SDEV_DEL,		/* device deleted 
+	SDEV_DEL,		/* device deleted
 				 * no commands allowed */
 	SDEV_QUIESCE,		/* Device quiescent.  No block commands
 				 * will be accepted, only specials (which
@@ -124,14 +125,14 @@ struct scsi_device {
 
 	unsigned int id, channel;
 	u64 lun;
-	unsigned int manufacturer;	/* Manufacturer of device, for using 
+	unsigned int manufacturer;	/* Manufacturer of device, for using
 					 * vendor-specific cmd's */
 	unsigned sector_size;	/* size in bytes */
 
 	void *hostdata;		/* available to low-level driver */
 	unsigned char type;
 	char scsi_level;
-	char inq_periph_qual;	/* PQ from INQUIRY data */	
+	char inq_periph_qual;	/* PQ from INQUIRY data */
 	struct mutex inquiry_mutex;
 	unsigned char inquiry_len;	/* valid bytes in 'inquiry' */
 	unsigned char * inquiry;	/* INQUIRY response data */
@@ -155,7 +156,7 @@ struct scsi_device {
 	unsigned busy:1;	/* Used to prevent races */
 	unsigned lockable:1;	/* Able to prevent media removal */
 	unsigned locked:1;      /* Media removal disabled */
-	unsigned borken:1;	/* Tell the Seagate driver to be 
+	unsigned borken:1;	/* Tell the Seagate driver to be
 				 * painfully slow on this device */
 	unsigned disconnect:1;	/* can disconnect */
 	unsigned soft_reset:1;	/* Uses soft reset option */
@@ -164,7 +165,7 @@ struct scsi_device {
 	unsigned ppr:1;		/* Device supports PPR messages */
 	unsigned tagged_supported:1;	/* Supports SCSI-II tagged queuing */
 	unsigned simple_tags:1;	/* simple queue tag messages are enabled */
-	unsigned was_reset:1;	/* There was a bus reset on the bus for 
+	unsigned was_reset:1;	/* There was a bus reset on the bus for
 				 * this device */
 	unsigned expecting_cc_ua:1; /* Expecting a CHECK_CONDITION/UNIT_ATTN
 				     * because we did a bus reset. */
@@ -203,6 +204,8 @@ struct scsi_device {
 
 #define SCSI_DEFAULT_AUTOSUSPEND_DELAY  -1
 	int autosuspend_delay;
+	unsigned rpm_autosuspend:1;	/* Enable runtime autosuspend at device
+					 * creation time */
 	/* If non-zero, use timeout (in jiffies) for all commands */
 	unsigned int timeout_override;
 
@@ -234,6 +237,12 @@ struct scsi_device {
 	enum scsi_device_state sdev_state;
 	struct task_struct	*quiesced_by;
 	unsigned long		sdev_data[0];
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
+	ANDROID_KABI_RESERVE(3);
+	ANDROID_KABI_RESERVE(4);
+	
 	u8 bootlunID;
 	bool support_tw_lu;
 } __attribute__((aligned(sizeof(unsigned long))));

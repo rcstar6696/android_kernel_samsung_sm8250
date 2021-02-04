@@ -3768,7 +3768,7 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 	flag |= tcp_clean_rtx_queue(sk, prior_fack, prior_snd_una, &sack_state);
 
 	tcp_rack_update_reo_wnd(sk, &rs);
-	
+
 #ifdef CONFIG_MPTCP
 	if (mptcp(tp)) {
 		if (mptcp_fallback_infinite(sk, flag)) {
@@ -3880,7 +3880,7 @@ static void smc_parse_options(const struct tcphdr *th,
  */
 void tcp_parse_options(const struct net *net,
 		       const struct sk_buff *skb,
-		       struct tcp_options_received *opt_rx, 
+		       struct tcp_options_received *opt_rx,
 #ifdef CONFIG_MPTCP
 		       struct mptcp_options_received *mopt,
 #endif
@@ -4878,9 +4878,9 @@ void tcp_data_ready(struct sock *sk)
 	int avail = tp->rcv_nxt - tp->copied_seq;
 
 #ifdef CONFIG_MPTCP
-	if (avail < sk->sk_rcvlowat && !sock_flag(sk, SOCK_DONE) && !mptcp(tp))
+	if (avail < sk->sk_rcvlowat && !tcp_rmem_pressure(sk) && !sock_flag(sk, SOCK_DONE) && !mptcp(tp))
 #else
-	if (avail < sk->sk_rcvlowat && !sock_flag(sk, SOCK_DONE))
+	if (avail < sk->sk_rcvlowat && !tcp_rmem_pressure(sk) && !sock_flag(sk, SOCK_DONE))
 #endif
 		return;
 
@@ -5419,7 +5419,7 @@ static void __tcp_ack_snd_check(struct sock *sk, int ofo_possible)
 	      * If application uses SO_RCVLOWAT, we want send ack now if
 	      * we have not received enough bytes to satisfy the condition.
 	      */
-	    
+
 #ifdef CONFIG_MPTCP
 	     (meta_tp->rcv_nxt - meta_tp->copied_seq < meta_sk->sk_rcvlowat ||
 		 tp->ops->__select_window(sk) >= tp->rcv_wnd)) ||

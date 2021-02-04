@@ -37,6 +37,10 @@
 
 #include <trace/events/kmem.h>
 
+#ifdef CONFIG_SLUB_DEBUG
+#include <linux/debugfs.h>
+#endif
+
 #include <linux/sec_debug.h>
 
 #include "internal.h"
@@ -53,7 +57,7 @@ do {							\
 		return r;		\
 } while (0)
 #else
-#define check_cred_cache(s,r)   
+#define check_cred_cache(s,r)
 #endif
 
 /*
@@ -277,7 +281,7 @@ static inline void *freelist_ptr(const struct kmem_cache *s, void *ptr,
 	 * freepointer to be restored incorrectly.
 	 */
 	return (void *)((unsigned long)ptr ^ s->random ^
-			(unsigned long)kasan_reset_tag((void *)ptr_addr));
+			swab((unsigned long)kasan_reset_tag((void *)ptr_addr)));
 #else
 	return ptr;
 #endif
@@ -323,12 +327,12 @@ static inline void set_freepointer(struct kmem_cache *s, void *object, void *fp)
 #endif
 
 #ifdef CONFIG_KDP_CRED
-	if (rkp_cred_enable && s->name && 
-		(!strcmp(s->name, CRED_JAR_RO)|| !strcmp(s->name, TSEC_JAR) 
+	if (rkp_cred_enable && s->name &&
+		(!strcmp(s->name, CRED_JAR_RO)|| !strcmp(s->name, TSEC_JAR)
 		 || !strcmp(s->name, VFSMNT_JAR))) {
 
 		uh_call(UH_APP_RKP, RKP_KDP_X44, (u64)object, (u64)s->offset, (u64)fp, 0);
-	} else 
+	} else
 #endif
 
 	*(void **)freeptr_addr = freelist_ptr(s, fp, freeptr_addr);
@@ -983,9 +987,9 @@ static int check_slab(struct kmem_cache *s, struct page *page)
 	/*
 	 * Skip this function for now
          */
-	if (s->name && (!strcmp(s->name, CRED_JAR_RO) 
-		|| !strcmp(s->name, TSEC_JAR) 
-		|| !strcmp(s->name, VFSMNT_JAR))) 
+	if (s->name && (!strcmp(s->name, CRED_JAR_RO)
+		|| !strcmp(s->name, TSEC_JAR)
+		|| !strcmp(s->name, VFSMNT_JAR)))
 		return 1;
 #endif
 	maxobj = order_objects(compound_order(page), s->size);
@@ -1402,9 +1406,9 @@ slab_flags_t kmem_cache_flags(unsigned int object_size,
 	void (*ctor)(void *))
 {
 #ifdef CONFIG_KDP_CRED
-	if (name && 
-		(!strcmp(name, CRED_JAR_RO) 
-		|| !strcmp(name, TSEC_JAR) 
+	if (name &&
+		(!strcmp(name, CRED_JAR_RO)
+		|| !strcmp(name, TSEC_JAR)
 		|| !strcmp(name, VFSMNT_JAR)))
 		return flags;
 #endif
@@ -1744,11 +1748,11 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 	if ((alloc_gfp & __GFP_DIRECT_RECLAIM) && oo_order(oo) > oo_order(s->min))
 		alloc_gfp = (alloc_gfp | __GFP_NOMEMALLOC) & ~(__GFP_RECLAIM|__GFP_NOFAIL);
 #ifdef CONFIG_KDP_CRED
-	if (s->name && 
-		(!strcmp(s->name, CRED_JAR_RO) ||  
-		!strcmp(s->name, TSEC_JAR)|| 
+	if (s->name &&
+		(!strcmp(s->name, CRED_JAR_RO) ||
+		!strcmp(s->name, TSEC_JAR)||
 		!strcmp(s->name, VFSMNT_JAR))) {
-	
+
 		virt_page = rkp_ro_alloc();
 		if(!virt_page)
 			goto def_alloc;
@@ -1773,7 +1777,7 @@ def_alloc:
 		stat(s, ORDER_FALLBACK);
 	}
 #ifdef CONFIG_KDP_CRED
-	} 
+	}
 #endif
 
 	page->objects = oo_objects(oo);
@@ -1798,13 +1802,13 @@ def_alloc:
 	if (s->name) {
 		u64	sc,va_page;
 		va_page = (u64)__va(page_to_phys(page));
-		
+
 		if(!strcmp(s->name, CRED_JAR_RO)) {
 			for(sc = 0; sc < (1 << oo_order(oo)) ; sc++) {
 				uh_call(UH_APP_RKP, RKP_KDP_X50, va_page, 0, 0, 0);
 				va_page += PAGE_SIZE;
 			}
-		} 
+		}
 #if 1
 		if(!strcmp(s->name, TSEC_JAR)) {
 			for(sc = 0; sc < (1 << oo_order(oo)) ; sc++) {
@@ -1813,7 +1817,7 @@ def_alloc:
 			}
 		}
 #endif
-#if 1 
+#if 1
 		if(!strcmp(s->name, VFSMNT_JAR)) {
 			for(sc = 0; sc < (1 << oo_order(oo)) ; sc++) {
 				uh_call(UH_APP_RKP, RKP_KDP_X4F, va_page, 0, 0, 0);
@@ -1881,7 +1885,7 @@ int rkp_from_vfsmnt_cache(unsigned long addr)
 	static void *objp;
 	static struct kmem_cache *s;
 	static struct page *page;
-	
+
 	objp = (void *)addr;
 
 	if(!objp)
@@ -1957,8 +1961,8 @@ static void __free_slab(struct kmem_cache *s, struct page *page)
 		current->reclaim_state->reclaimed_slab += pages;
 #ifdef CONFIG_KDP_CRED
 	/* We free the protected pages here. */
-	if (s->name && (!strcmp(s->name, CRED_JAR_RO) 
-		|| !strcmp(s->name, TSEC_JAR) 
+	if (s->name && (!strcmp(s->name, CRED_JAR_RO)
+		|| !strcmp(s->name, TSEC_JAR)
 		|| !strcmp(s->name, VFSMNT_JAR))) {
 		free_ro_pages(s,page, order);
 		return;
@@ -6119,6 +6123,85 @@ struct saved_alias {
 
 static struct saved_alias *alias_list;
 
+#ifdef CONFIG_SLUB_DEBUG
+static struct dentry *slab_debugfs_top;
+
+static int alloc_trace_locations(struct seq_file *seq, struct kmem_cache *s,
+			enum track_item alloc)
+{
+	unsigned long i;
+	struct loc_track t = { 0, 0, NULL };
+	int node;
+	unsigned long *map = kmalloc(BITS_TO_LONGS(oo_objects(s->max)) *
+			sizeof(unsigned long), GFP_KERNEL);
+	struct kmem_cache_node *n;
+
+	if (!map || !alloc_loc_track(&t, PAGE_SIZE / sizeof(struct location),
+			GFP_KERNEL)) {
+		kfree(map);
+		return -ENOMEM;
+	}
+	/* Push back cpu slabs */
+	flush_all(s);
+
+	for_each_kmem_cache_node(s, node, n) {
+		unsigned long flags;
+		struct page *page;
+
+		if (!atomic_long_read(&n->nr_slabs))
+			continue;
+
+		spin_lock_irqsave(&n->list_lock, flags);
+		list_for_each_entry(page, &n->partial, lru)
+			process_slab(&t, s, page, alloc, map);
+		list_for_each_entry(page, &n->full, lru)
+			process_slab(&t, s, page, alloc, map);
+		spin_unlock_irqrestore(&n->list_lock, flags);
+	}
+
+	for (i = 0; i < t.count; i++) {
+		struct location *l = &t.loc[i];
+
+		seq_printf(seq,
+		"alloc_list: call_site=%pS count=%zu object_size=%zu slab_size=%zu slab_name=%s\n",
+			l->addr, l->count, s->object_size, s->size, s->name);
+	}
+
+	free_loc_track(&t);
+	kfree(map);
+	return 0;
+}
+
+static int slab_debug_alloc_trace(struct seq_file *seq,
+					void *ignored)
+{
+
+	struct kmem_cache *slab;
+
+	list_for_each_entry(slab, &slab_caches, list) {
+		if (!(slab->flags & SLAB_STORE_USER))
+			continue;
+		alloc_trace_locations(seq, slab, TRACK_ALLOC);
+	}
+
+	return 0;
+}
+
+static int slab_debug_alloc_trace_open(struct inode *inode,
+					struct file *file)
+{
+	return single_open(file, slab_debug_alloc_trace,
+					inode->i_private);
+}
+
+static const struct file_operations slab_debug_alloc_fops = {
+	.open    = slab_debug_alloc_trace_open,
+	.read    = seq_read,
+	.llseek  = seq_lseek,
+	.release = single_release,
+};
+#endif
+
 static int sysfs_slab_alias(struct kmem_cache *s, const char *name)
 {
 	struct saved_alias *al;
@@ -6164,6 +6247,22 @@ static int __init slab_sysfs_init(void)
 			pr_err("SLUB: Unable to add boot slab %s to sysfs\n",
 			       s->name);
 	}
+
+#ifdef CONFIG_SLUB_DEBUG
+	if (slub_debug) {
+		slab_debugfs_top = debugfs_create_dir("slab", NULL);
+		if (!slab_debugfs_top) {
+			pr_err("Couldn't create slab debugfs directory\n");
+			return -ENODEV;
+		}
+
+		if (!debugfs_create_file("alloc_trace", 0400, slab_debugfs_top,
+					NULL, &slab_debug_alloc_fops)) {
+			pr_err("Couldn't create slab/tests debugfs directory\n");
+			return -ENODEV;
+		}
+	}
+#endif
 
 	while (alias_list) {
 		struct saved_alias *al = alias_list;
