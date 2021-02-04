@@ -2900,20 +2900,20 @@ err_translate_fd_failed:
 }
 
 //[SAnP
-static void print_binder_proc_inner(struct binder_proc *proc) 
+static void print_binder_proc_inner(struct binder_proc *proc)
 {
 	struct rb_node *pn;
 	struct binder_thread *p_thread;
 	struct binder_transaction *t;
 	struct binder_buffer *buffer;
-	uint32_t cnt = 1; 
+	uint32_t cnt = 1;
 
 	binder_inner_proc_lock(proc);
 	for (pn = rb_first(&proc->threads); pn != NULL; pn = rb_next(pn)) {
 		p_thread = rb_entry(pn, struct binder_thread, rb_node);
 		t = p_thread->transaction_stack;
 		if (t) {
-			spin_lock(&t->lock);  
+			spin_lock(&t->lock);
 			if (t->from != p_thread && t->to_thread == p_thread) { //incoming transaction
 				buffer = t->buffer;
 				if (buffer != NULL) {
@@ -3175,7 +3175,7 @@ static void freecess_sync_binder_report(struct binder_proc *proc,
 	if ((!(tr->flags & TF_ONE_WAY)) && target_proc
 		&& target_proc->tsk && target_proc->tsk->cred
 		&& (target_proc->tsk->cred->euid.val > 10000)
-		&& (proc->pid != target_proc->pid) 
+		&& (proc->pid != target_proc->pid)
 		&& thread_group_is_frozen(target_proc->tsk)) {
 		//if sync binder, we don't need detecting info, so set code and interfacename as default value.
 		binder_report(target_proc->tsk, 0, "sync_binder", tr->flags & TF_ONE_WAY);
@@ -3501,8 +3501,8 @@ static void binder_transaction(struct binder_proc *proc,
 		//[SAnP
 		if (return_error_param == -ENOSPC) {
 			mutex_lock(&binder_procs_lock);
-			print_binder_proc_inner(target_proc);  
-			mutex_unlock(&binder_procs_lock);   
+			print_binder_proc_inner(target_proc);
+			mutex_unlock(&binder_procs_lock);
 		}
 		//SAnP]
 		goto err_binder_alloc_buf_failed;
@@ -3571,7 +3571,7 @@ static void binder_transaction(struct binder_proc *proc,
 	}
 
 #ifdef CONFIG_SAMSUNG_FREECESS
-	freecess_async_binder_report(proc, target_proc, tr, t); 
+	freecess_async_binder_report(proc, target_proc, tr, t);
 #endif
 
 	off_start_offset = ALIGN(tr->data_size, sizeof(void *));
@@ -3665,7 +3665,7 @@ static void binder_transaction(struct binder_proc *proc,
 			binder_size_t parent_offset;
 			struct binder_fd_array_object *fda =
 				to_binder_fd_array_object(hdr);
-			size_t num_valid = (buffer_offset - off_start_offset) / 
+			size_t num_valid = (buffer_offset - off_start_offset) /
 						sizeof(binder_size_t);
 			struct binder_buffer_object *parent =
 				binder_validate_ptr(target_proc, t->buffer,

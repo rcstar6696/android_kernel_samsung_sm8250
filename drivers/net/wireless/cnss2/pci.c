@@ -927,6 +927,21 @@ int cnss_pci_link_down(struct device *dev)
 }
 EXPORT_SYMBOL(cnss_pci_link_down);
 
+int cnss_pci_get_reg_dump(struct device *dev, uint8_t *buffer, uint32_t len)
+{
+	struct pci_dev *pci_dev = to_pci_dev(dev);
+
+	if (!pci_dev) {
+		cnss_pr_err("pci_dev is NULL\n");
+		return -EINVAL;
+	}
+
+	cnss_pr_dbg("Get pci reg dump for hang data\n");
+
+	return msm_pcie_reg_dump(pci_dev, buffer, len);
+}
+EXPORT_SYMBOL(cnss_pci_get_reg_dump);
+
 int cnss_pcie_is_device_down(struct cnss_pci_data *pci_priv)
 {
 	struct cnss_plat_data *plat_priv;
@@ -1491,6 +1506,8 @@ int cnss_pci_call_driver_probe(struct cnss_pci_data *pci_priv)
 		if (ret) {
 			cnss_pr_err("Failed to idle restart host driver, err = %d\n",
 				    ret);
+			plat_priv->power_up_error = ret;
+			complete_all(&plat_priv->power_up_complete);
 			goto out;
 		}
 		clear_bit(CNSS_DRIVER_RECOVERY, &plat_priv->driver_state);
@@ -1806,6 +1823,7 @@ static int cnss_qca6290_powerup(struct cnss_pci_data *pci_priv)
 		cnss_pci_deinit_mhi(pci_priv);
 	}
 
+	plat_priv->power_up_error = 0;
 retry:
 	ret = cnss_power_on_device(plat_priv);
 	if (ret) {
@@ -4304,10 +4322,12 @@ static void cnss_dev_rddm_timeout_hdlr(struct timer_list *t)
 {
 	struct cnss_pci_data *pci_priv =
 		from_timer(pci_priv, t, dev_rddm_timer);
+	struct mhi_controller *mhi_ctrl;
 
 	if (!pci_priv)
 		return;
 
+	mhi_ctrl = pci_priv->mhi_ctrl;
 	cnss_fatal_err("Timeout waiting for RDDM notification\n");
 
 	cnss_schedule_recovery(&pci_priv->pci_dev->dev, CNSS_REASON_TIMEOUT);
@@ -4374,6 +4394,14 @@ static void cnss_mhi_notify_status(struct mhi_controller *mhi_ctrl, void *priv,
 		plat_priv->use_fw_path_with_prefix = false;
 		cnss_pci_update_fw_name(pci_priv);
 		return;
+	case MHI_CB_BOOTUP_TIMEOUT:
+		if (plat_priv->device_id == QCA6490_DEVICE_ID ||
+		    plat_priv->device_id == QCA6390_DEVICE_ID) {
+			cnss_pci_dump_bl_sram_mem(pci_priv);
+			cnss_pci_dump_mhi_reg(pci_priv);
+		}
+		cnss_reason = CNSS_REASON_TIMEOUT;
+		break;
 	default:
 		cnss_pr_err("Unsupported MHI status cb reason: %d\n", reason);
 		return;
