@@ -4361,7 +4361,7 @@ static int ufshcd_queuecommand(struct Scsi_Host *host, struct scsi_cmnd *cmd)
 	int add_tag;
 	int pre_req_err = -EBUSY;
 	int lun = 0;
-	
+
 	if (cmd && cmd->device)
 		lun = ufshcd_scsi_to_upiu_lun(cmd->device->lun);
 #endif
@@ -9893,6 +9893,8 @@ static int ufs_get_device_desc(struct ufs_hba *hba,
 	u8 *desc_buf;
 #endif
 
+	u32 d_lu_wb_buf_alloc;
+
 	buff_len = max_t(size_t, hba->desc_size.dev_desc,
 			 QUERY_DESC_MAX_SIZE + 1);
 	desc_buf = kmalloc(buff_len, GFP_KERNEL);
@@ -9976,14 +9978,17 @@ get_model_string:
 
 		hba->dev_info.wb_config_lun = false;
 		for (lun = 0; lun < UFS_UPIU_MAX_GENERAL_LUN; lun++) {
-			memset(wb_buf, 0, sizeof(wb_buf));
-			err = ufshcd_get_wb_alloc_units(hba, lun, wb_buf);
+			d_lu_wb_buf_alloc = 0;
+			err = ufshcd_read_unit_desc_param(hba,
+					lun,
+					UNIT_DESC_PARAM_WB_BUF_ALLOC_UNITS,
+					(u8 *)&d_lu_wb_buf_alloc,
+					sizeof(d_lu_wb_buf_alloc));
+
 			if (err)
 				break;
 
-			res = wb_buf[0] << 24 | wb_buf[1] << 16 |
-				wb_buf[2] << 8 | wb_buf[3];
-			if (res) {
+			if (d_lu_wb_buf_alloc) {
 				hba->dev_info.wb_config_lun = true;
 				break;
 			}
@@ -12089,7 +12094,7 @@ disable_clks:
 	 */
 	ufshcd_disable_irq(hba);
 
-	/* reset the connected UFS device when shutdown */
+	/* reset the connected UFS device during shutdown */
 	if (ufshcd_is_shutdown_pm(pm_op)) {
 		ret = ufshcd_assert_device_reset(hba);
 		if (ret)
@@ -12115,10 +12120,10 @@ disable_clks:
 
 	/* Put the host controller in low power mode if possible */
 	ufshcd_hba_vreg_set_lpm(hba);
-
-	if (!hba->auto_bkops_enabled)
+	if (!hba->auto_bkops_enabled ||
+		!(req_dev_pwr_mode == UFS_ACTIVE_PWR_MODE &&
+		req_link_state == UIC_LINK_ACTIVE_STATE))
 		ufshcd_vreg_set_lpm(hba);
-
 	goto out;
 
 set_link_active:

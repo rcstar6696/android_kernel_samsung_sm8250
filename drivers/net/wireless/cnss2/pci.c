@@ -371,19 +371,20 @@ int cnss_pci_check_link_status(struct cnss_pci_data *pci_priv)
 	u16 device_id;
 
 	if (pci_priv->pci_link_state == PCI_LINK_DOWN) {
-		cnss_pr_dbg("PCIe link is suspended\n");
+		cnss_pr_dbg("%ps: PCIe link is suspended\n", (void *)_RET_IP_);
 		return -EIO;
 	}
 
 	if (pci_priv->pci_link_down_ind) {
-		cnss_pr_err("PCIe link is down\n");
+		cnss_pr_err("%ps: PCIe link is down\n", (void *)_RET_IP_);
 		return -EIO;
 	}
 
 	pci_read_config_word(pci_priv->pci_dev, PCI_DEVICE_ID, &device_id);
 	if (device_id != pci_priv->device_id)  {
-		cnss_fatal_err("PCI device ID mismatch, link possibly down, current read ID: 0x%x, record ID: 0x%x\n",
-			       device_id, pci_priv->device_id);
+		cnss_fatal_err("%ps: PCI device ID mismatch, link possibly down, current read ID: 0x%x, record ID: 0x%x\n",
+			       (void *)_RET_IP_, device_id,
+			       pci_priv->device_id);
 		return -EIO;
 	}
 
@@ -1782,21 +1783,14 @@ static void cnss_qca6174_crash_shutdown(struct cnss_pci_data *pci_priv)
 
 static int cnss_qca6174_ramdump(struct cnss_pci_data *pci_priv)
 {
-	int ret = 0;
 	struct cnss_plat_data *plat_priv = pci_priv->plat_priv;
 	struct cnss_ramdump_info *ramdump_info;
-	struct ramdump_segment segment;
 
 	ramdump_info = &plat_priv->ramdump_info;
 	if (!ramdump_info->ramdump_size)
 		return -EINVAL;
 
-	memset(&segment, 0, sizeof(segment));
-	segment.v_address = ramdump_info->ramdump_va;
-	segment.size = ramdump_info->ramdump_size;
-	ret = do_ramdump(ramdump_info->ramdump_dev, &segment, 1);
-
-	return ret;
+	return cnss_do_ramdump(plat_priv);
 }
 
 static int cnss_qca6290_powerup(struct cnss_pci_data *pci_priv)
@@ -1955,53 +1949,13 @@ static int cnss_qca6290_ramdump(struct cnss_pci_data *pci_priv)
 	struct cnss_plat_data *plat_priv = pci_priv->plat_priv;
 	struct cnss_ramdump_info_v2 *info_v2 = &plat_priv->ramdump_info_v2;
 	struct cnss_dump_data *dump_data = &info_v2->dump_data;
-	struct cnss_dump_seg *dump_seg = info_v2->dump_data_vaddr;
-	struct ramdump_segment *ramdump_segs, *s;
-	struct cnss_dump_meta_info meta_info = {0};
-	int i, ret = 0;
+	int ret = 0;
 
 	if (!info_v2->dump_data_valid ||
 	    dump_data->nentries == 0)
 		return 0;
 
-	ramdump_segs = kcalloc(dump_data->nentries + 1,
-			       sizeof(*ramdump_segs),
-			       GFP_KERNEL);
-	if (!ramdump_segs)
-		return -ENOMEM;
-
-	s = ramdump_segs + 1;
-	for (i = 0; i < dump_data->nentries; i++) {
-		if (dump_seg->type >= CNSS_FW_DUMP_TYPE_MAX) {
-			cnss_pr_err("Unsupported dump type: %d",
-				    dump_seg->type);
-			continue;
-		}
-
-		if (meta_info.entry[dump_seg->type].entry_start == 0) {
-			meta_info.entry[dump_seg->type].type = dump_seg->type;
-			meta_info.entry[dump_seg->type].entry_start = i + 1;
-		}
-		meta_info.entry[dump_seg->type].entry_num++;
-
-		s->address = dump_seg->address;
-		s->v_address = dump_seg->v_address;
-		s->size = dump_seg->size;
-		s++;
-		dump_seg++;
-	}
-
-	meta_info.magic = CNSS_RAMDUMP_MAGIC;
-	meta_info.version = CNSS_RAMDUMP_VERSION;
-	meta_info.chipset = pci_priv->device_id;
-	meta_info.total_entries = CNSS_FW_DUMP_TYPE_MAX;
-
-	ramdump_segs->v_address = &meta_info;
-	ramdump_segs->size = sizeof(meta_info);
-
-	ret = do_elf_ramdump(info_v2->ramdump_dev, ramdump_segs,
-			     dump_data->nentries + 1);
-	kfree(ramdump_segs);
+	ret = cnss_do_elf_ramdump(plat_priv);
 
 	cnss_pci_clear_dump_info(pci_priv);
 	cnss_pci_deinit_mhi(pci_priv);
@@ -2476,6 +2430,8 @@ int cnss_pci_resume_bus(struct cnss_pci_data *pci_priv)
 		goto out;
 	}
 
+	pci_priv->pci_link_state = PCI_LINK_UP;
+
 	if (pci_priv->drv_connected_last)
 		goto skip_enable_pci;
 
@@ -2493,7 +2449,6 @@ int cnss_pci_resume_bus(struct cnss_pci_data *pci_priv)
 
 skip_enable_pci:
 	cnss_pci_set_mhi_state(pci_priv, CNSS_MHI_RESUME);
-	pci_priv->pci_link_state = PCI_LINK_UP;
 out:
 	return ret;
 }
@@ -2965,7 +2920,14 @@ int cnss_pci_force_wake_request_sync(struct device *dev, int timeout_us)
 	if (test_bit(CNSS_DEV_ERR_NOTIFY, &plat_priv->driver_state))
 		return -EAGAIN;
 
-	return mhi_device_get_sync_atomic(mhi_ctrl->mhi_dev, timeout_us);
+	if (timeout_us) {
+		/* Busy wait for timeout_us */
+		return mhi_device_get_sync_atomic(mhi_ctrl->mhi_dev,
+						  timeout_us);
+	} else {
+		/* Sleep wait for mhi_ctrl->timeout_ms */
+		return mhi_device_get_sync(mhi_ctrl->mhi_dev, MHI_VOTE_DEVICE);
+	}
 }
 EXPORT_SYMBOL(cnss_pci_force_wake_request_sync);
 
@@ -3902,6 +3864,13 @@ int cnss_pci_force_fw_assert_hdlr(struct cnss_pci_data *pci_priv)
 		return -EINVAL;
 
 	cnss_auto_resume(&pci_priv->pci_dev->dev);
+	/* If link is still down here, directly trigger link down recovery */
+	ret = cnss_pci_check_link_status(pci_priv);
+	if (ret) {
+		cnss_pci_link_down(&pci_priv->pci_dev->dev);
+		return 0;
+	}
+
 	cnss_pci_dump_misc_reg(pci_priv);
 	cnss_pci_dump_shadow_reg(pci_priv);
 	cnss_pci_dump_sram_mem(pci_priv);

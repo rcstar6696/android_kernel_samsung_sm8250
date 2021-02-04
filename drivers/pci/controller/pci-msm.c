@@ -1140,7 +1140,7 @@ static u32 pcie_get_cur_link_bw(u32 rc_idx, u32 *speed, u32 *width)
 	u32 shift = offset % 4;
 
 	if (shift) {
-		offset = (offset >> 2) << 2;  
+		offset = (offset >> 2) << 2;
 	}
 	val = readl_relaxed(dev->dm_core + offset);
 
@@ -2627,7 +2627,7 @@ static ssize_t pcie_sec_phy_write(struct file *file,
 		ret = sscanf(pos, " %u", &sec_phy_cur_erase_idx);
 		if (ret != 1)
 			return -EINVAL;
-		
+
 		if (sec_phy_cur_erase_idx < 0 ||
 			sec_phy_cur_erase_idx >= MAX_SEC_PHY_TEST_NUM) {
 			pr_err("PCIE SEC: erase idx is wrong.\n");
@@ -3960,7 +3960,7 @@ static int pcie_phy_init(struct msm_pcie_dev_t *dev)
 			phy_seq++;
 		}
 	}
-	
+
 #ifdef CONFIG_SEC_PCIE_DEV
 	pcie_sec_phy_init(dev);
 #endif
@@ -3981,7 +3981,7 @@ static int pcie_phy_init(struct msm_pcie_dev_t *dev)
 		retries++;
 		usleep_range(REFCLK_STABILIZATION_DELAY_US_MIN,
 					 REFCLK_STABILIZATION_DELAY_US_MAX);
-		
+
 #if !defined(CONFIG_SEC_FACTORY)
 		/* reset PHY on every 10th attempt for PCIe0 */
 		if(!dev->rc_idx && !(retries % 10)) {
@@ -3991,7 +3991,7 @@ static int pcie_phy_init(struct msm_pcie_dev_t *dev)
 			usleep_range(1000, 1005);
 		}
 	} while (retries < PHY_READY_TIMEOUT_COUNT * 10);
-#else		
+#else
 	} while (retries < PHY_READY_TIMEOUT_COUNT);
 #endif
 
@@ -3999,7 +3999,7 @@ static int pcie_phy_init(struct msm_pcie_dev_t *dev)
 	if (max_retries < retries)
 		max_retries = retries;
 	total_enable_cnt++;
-	
+
 	PCIE_ERR(dev, "RC%d: number of PHY retries:%ld(Max:%d, Total:%ld).\n",
 		dev->rc_idx, retries, max_retries, total_enable_cnt);
 #else
@@ -4013,7 +4013,7 @@ static int pcie_phy_init(struct msm_pcie_dev_t *dev)
 			dev->rc_idx);
 #ifdef CONFIG_SEC_PCIE
 		update_phyinit_fail_count(dev->rc_idx);
-#endif		
+#endif
 		pcie_phy_dump(dev);
 		return -ENODEV;
 	}
@@ -4338,13 +4338,13 @@ static int msm_pcie_get_phy_override(struct msm_pcie_dev_t *pcie_dev, int size) 
 	pcie_dev->phy_sequence = devm_kzalloc(&pdev->dev, size + size_ovr, GFP_KERNEL);
 	if (!pcie_dev->phy_sequence) {
 		pcie_dev->phy_sequence = old_sequence;
-		
+
 		PCIE_DBG(pcie_dev,
 			"PCIe: RC%d: phy sequence override devm_kzalloc fail\n",
 			pcie_dev->rc_idx);
 		return 0;
 	}
-		
+
 	memcpy(pcie_dev->phy_sequence, old_sequence, size);
 	pcie_dev->phy_len += size_ovr / sizeof(*pcie_dev->phy_sequence);
 	ret = of_property_read_u32_array(pdev->dev.of_node,
@@ -4362,7 +4362,7 @@ static int msm_pcie_get_phy_override(struct msm_pcie_dev_t *pcie_dev, int size) 
 			pcie_dev->rc_idx);
 		return 0;
 	}
-	
+
 	devm_kfree(&pdev->dev, old_sequence);
 	return 0;
 }
@@ -5961,11 +5961,11 @@ static irqreturn_t handle_linkdown_irq(int irq, void *data)
 		"PCIe: No. %ld linkdown IRQ for RC%d.\n",
 		dev->linkdown_counter, dev->rc_idx);
 
-	if (!dev->enumerated || dev->link_status != MSM_PCIE_LINK_ENABLED) {
+	if (!dev->enumerated || dev->link_status != MSM_PCIE_LINK_ENABLED)
 		PCIE_DBG(dev,
 			"PCIe:Linkdown IRQ for RC%d when the link is not enabled\n",
 			dev->rc_idx);
-	} else if (dev->suspending) {
+	else if (dev->suspending)
 		PCIE_DBG(dev,
 			"PCIe:the link of RC%d is suspending.\n",
 			dev->rc_idx);
@@ -6808,7 +6808,7 @@ static int msm_pcie_probe(struct platform_device *pdev)
 	pcie_dev->ep_loaded = false;
 #endif
 
-#ifdef CONFIG_SEC_PCIE	
+#ifdef CONFIG_SEC_PCIE
 	msm_pcie_dev[rc_idx].ignore_pcie_error =
 		of_property_read_bool((&pdev->dev)->of_node,
 				"ignore-pcie-error");
@@ -7571,7 +7571,7 @@ static ssize_t sec_show_l1ss_stat(struct device *in_dev,
 					"\tnot support L1\n");
 			goto out;
 		}
-		
+
 		pci_read_config_dword(pdev, pdev->pcie_cap + PCI_EXP_LNKCTL, &val);
 		count += scnprintf(buf + count, PAGE_SIZE,
 				"\tL1 %s\n",val & PCI_EXP_LNKCTL_ASPM_L1 ? "E" : "D");
@@ -8605,7 +8605,7 @@ static int msm_pcie_drv_suspend(struct msm_pcie_dev_t *pcie_dev,
 	pcie_dev->link_status = MSM_PCIE_LINK_DRV;
 
 	PCIE_ERR(pcie_dev, "PCIe: RC%d: prevnet_l1=%d LTSSM_STATE=:%s\n",
-			pcie_dev->rc_idx, 
+			pcie_dev->rc_idx,
 			pcie_dev->prevent_l1,
 			TO_LTSSM_STR(readl_relaxed(pcie_dev->parf + PCIE20_PARF_LTSSM) & 0x3f));
 
@@ -8799,7 +8799,7 @@ int msm_pcie_pm_control(enum msm_pcie_pm_opt pm_opt, u32 busnr, void *user,
 		break;
 	case MSM_PCIE_HANDLE_LINKDOWN:
 		PCIE_DBG(&msm_pcie_dev[rc_idx],
-			 "User of RC%d requests handling link down.\n", rc_idx);
+			"User of RC%d requests handling link down.\n", rc_idx);
 		spin_lock_irqsave(&msm_pcie_dev[rc_idx].irq_lock, flags);
 		msm_pcie_handle_linkdown(pcie_dev);
 		spin_unlock_irqrestore(&msm_pcie_dev[rc_idx].irq_lock, flags);
