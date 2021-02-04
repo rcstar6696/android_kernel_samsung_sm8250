@@ -716,7 +716,7 @@ void ftt_set_vruntime(struct task_struct *task, int set)
 				cfs_rq->ftt_rqcnt--;
 		}
 	}
-	
+
 	if (on_tree)
 		__enqueue_entity(cfs_rq, se);
 }
@@ -983,8 +983,8 @@ static void update_curr(struct cfs_rq *cfs_rq)
 	if (entity_is_task(curr)) {
 		struct task_struct *curtask = task_of(curr);
 
-		if (is_ftt(curr)) {	
-			curr->ftt_vrt_delta += calc_delta_fair(delta_exec, curr);			
+		if (is_ftt(curr)) {
+			curr->ftt_vrt_delta += calc_delta_fair(delta_exec, curr);
 		} else {
 			curr->vruntime += calc_delta_fair(delta_exec, curr);
 			update_min_vruntime(cfs_rq);
@@ -995,7 +995,7 @@ static void update_curr(struct cfs_rq *cfs_rq)
 		account_group_exec_runtime(curtask, delta_exec);
 	} else {
 		curr->vruntime += calc_delta_fair(delta_exec, curr);
-		update_min_vruntime(cfs_rq);	
+		update_min_vruntime(cfs_rq);
 	}
 #else
 	curr->vruntime += calc_delta_fair(delta_exec, curr);
@@ -2848,7 +2848,7 @@ void task_tick_numa(struct rq *rq, struct task_struct *curr)
 	/*
 	 * We don't care about NUMA placement if we don't have memory.
 	 */
-	if (!curr->mm || (curr->flags & PF_EXITING) || work->next != work)
+	if ((curr->flags & (PF_EXITING | PF_KTHREAD)) || work->next != work)
 		return;
 
 	/*
@@ -5581,7 +5581,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct cfs_rq *cfs_rq;
 	struct sched_entity *se = &p->se;
-	
+
 #ifdef CONFIG_PERF_MGR
 	unsigned long next_fps_boosted_util;
 	int boosted_cnt;
@@ -5621,7 +5621,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 #ifdef CONFIG_PERF_MGR
 	if ( p->drawing_flag ){
 		alloc_cpu = cpu_of(rq);
-		
+
 		/* Get current value from run queue */
 		boosted_cnt = per_cpu(fps_boosted_task_count, alloc_cpu);
 		cur_group_id = per_cpu(fps_group_id, alloc_cpu);
@@ -6337,15 +6337,20 @@ schedtune_margin(unsigned long signal, long boost)
 	return margin;
 }
 
-static inline int
-schedtune_cpu_margin(unsigned long util, int cpu)
+inline long
+schedtune_cpu_margin_with(unsigned long util, int cpu, struct task_struct *p)
 {
-	int boost = schedtune_cpu_boost(cpu);
+	int boost = schedtune_cpu_boost_with(cpu, p);
+	long margin;
 
 	if (boost == 0)
-		return 0;
+		margin = 0;
+	else
+		margin = schedtune_margin(util, boost);
 
-	return schedtune_margin(util, boost);
+	trace_sched_boost_cpu(cpu, util, margin);
+
+	return margin;
 }
 
 long schedtune_task_margin(struct task_struct *task)
@@ -6369,7 +6374,7 @@ stune_util(int cpu, unsigned long other_util,
 {
 	unsigned long util = min_t(unsigned long, SCHED_CAPACITY_SCALE,
 				   cpu_util_freq(cpu, walt_load) + other_util);
-	long margin = schedtune_cpu_margin(util, cpu);
+	long margin = schedtune_cpu_margin_with(util, cpu, NULL);
 	unsigned long boosted_util;
 #ifdef CONFIG_PERF_MGR
 	unsigned long fps_util = per_cpu(fps_boosted_util, cpu);
@@ -6385,8 +6390,8 @@ stune_util(int cpu, unsigned long other_util,
 
 #else /* CONFIG_SCHED_TUNE */
 
-static inline int
-schedtune_cpu_margin(unsigned long util, int cpu)
+inline long
+schedtune_cpu_margin_with(unsigned long util, int cpu, struct task_struct *p)
 {
 	return 0;
 }
@@ -9262,7 +9267,15 @@ redo:
 		if (!can_migrate_task(p, env))
 			goto next;
 
-		load = task_h_load(p);
+		/*
+		 * Depending of the number of CPUs and tasks and the
+		 * cgroup hierarchy, task_h_load() can return a null
+		 * value. Make sure that env->imbalance decreases
+		 * otherwise detach_tasks() will stop only after
+		 * detaching up to loop_max tasks.
+		 */
+		load = max_t(unsigned long, task_h_load(p), 1);
+
 
 		if (sched_feat(LB_MIN) && load < 16 && !env->sd->nr_balance_failed)
 			goto next;
