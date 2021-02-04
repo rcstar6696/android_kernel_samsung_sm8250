@@ -53,9 +53,13 @@ static const char *default_irq_name = "(unnamed)";
 static struct kobject *kobj;
 
 static bool capture_reasons;
+#define MAX_WAKEUP_REASON_IRQS 32
+static int irq_list[MAX_WAKEUP_REASON_IRQS];
+static int irqcount;
 static bool suspend_abort;
 static bool abnormal_wake;
 static char non_irq_wake_reason[MAX_SUSPEND_ABORT_LEN];
+static char abort_reason[MAX_SUSPEND_ABORT_LEN];
 
 static ktime_t last_monotime; /* monotonic time before last suspend */
 static ktime_t curr_monotime; /* monotonic time after last suspend */
@@ -216,15 +220,6 @@ static void __log_abort_or_abnormal_wake(bool abort, const char *fmt,
 	spin_unlock_irqrestore(&wakeup_reason_lock, flags);
 }
 
-void log_suspend_abort_reason(const char *fmt, ...)
-{
-	va_list args;
-
-	va_start(args, fmt);
-	__log_abort_or_abnormal_wake(true, fmt, args);
-	va_end(args);
-}
-
 void log_abnormal_wakeup_reason(const char *fmt, ...)
 {
 	va_list args;
@@ -373,16 +368,16 @@ void log_wakeup_reason(int irq)
 	else
 		printk(KERN_INFO "Resume caused by IRQ %d\n", irq);
 
-	spin_lock_irqsave(&resume_reason_lock, flags);
+	spin_lock_irqsave(&wakeup_reason_lock, flags);
 	if (irqcount == MAX_WAKEUP_REASON_IRQS) {
-		spin_unlock_irqrestore(&resume_reason_lock, flags);
+		spin_unlock_irqrestore(&wakeup_reason_lock, flags);
 		printk(KERN_WARNING "Resume caused by more than %d IRQs\n",
 				MAX_WAKEUP_REASON_IRQS);
 		return;
 	}
 
 	irq_list[irqcount++] = irq;
-	spin_unlock_irqrestore(&resume_reason_lock, flags);
+	spin_unlock_irqrestore(&wakeup_reason_lock, flags);
 }
 
 void log_suspend_abort_reason(const char *fmt, ...)
@@ -390,11 +385,11 @@ void log_suspend_abort_reason(const char *fmt, ...)
 	unsigned long flags;
 	va_list args;
 
-	spin_lock_irqsave(&resume_reason_lock, flags);
+	spin_lock_irqsave(&wakeup_reason_lock, flags);
 
 	//Suspend abort reason has already been logged.
 	if (suspend_abort) {
-		spin_unlock_irqrestore(&resume_reason_lock, flags);
+		spin_unlock_irqrestore(&wakeup_reason_lock, flags);
 		return;
 	}
 
@@ -402,7 +397,7 @@ void log_suspend_abort_reason(const char *fmt, ...)
 	va_start(args, fmt);
 	vsnprintf(abort_reason, MAX_SUSPEND_ABORT_LEN, fmt, args);
 	va_end(args);
-	spin_unlock_irqrestore(&resume_reason_lock, flags);
+	spin_unlock_irqrestore(&wakeup_reason_lock, flags);
 }
 
 /* Detects a suspend and clears all the previous wake up reasons*/

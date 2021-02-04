@@ -69,7 +69,7 @@ struct fscrypt_operations {
 
 #if defined(CONFIG_DDAR) || defined(CONFIG_FSCRYPT_SDP)
 	   	int (*get_knox_context)(struct inode *, const char *, void *, size_t);
-	   	int (*set_knox_context)(struct inode *, const char *, const void *, size_t, void *)
+	   	int (*set_knox_context)(struct inode *, const char *, const void *, size_t, void *);
 #endif
 	const union fscrypt_context *(*get_dummy_context)(
 		struct super_block *sb);

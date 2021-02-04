@@ -1831,7 +1831,7 @@ static void default_options(struct f2fs_sb_info *sbi, bool remount)
 				GFP_KERNEL);
 		if (!mount_opts)
 			return;
-		err = parse_options(sb, mount_opts);
+		err = parse_options(sb, mount_opts, false);
 		if (err)
 			f2fs_warn(sbi,
 				"failed to parse options in superblock\n");
